@@ -152,6 +152,16 @@ bool hasFault(uint8_t faultBit) {
 }
 
 void handleFault(uint8_t faultBit) {
+  // OPT: v3.2 — Fault başına 5s cooldown (döngüsel I2C/servo reset koruması)
+  if (faultBit == 0) return;               // UB koruması (>>= 1 sonsuz döngü)
+  static uint32_t lastHandleMs[8] = {};
+  uint8_t idx = 0;
+  uint8_t tmp = faultBit;
+  while (tmp >>= 1) idx++;                  // tek-bit fault → bit pozisyonu (0..5)
+  uint32_t now = millis();
+  if (now - lastHandleMs[idx] < 5000) return;   // 5 saniyede bir müdahale
+  lastHandleMs[idx] = now;
+
   switch (faultBit) {
     case FAULT_I2C:
       Serial.println(F("[FAULT] I2C hatası - IMU ve servo sürücüler etkilenebilir."));

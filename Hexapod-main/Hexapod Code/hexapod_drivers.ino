@@ -67,6 +67,40 @@ void pca9685SetPWM(uint8_t addr, uint8_t ch, uint16_t value,
 }
 
 // ────────────────────────────────────────────────────────────────
+// pca9685SetLeg — Tek I2C transaction ile 3 ardışık servo kanalını yaz
+//
+//  AUTO-INCREMENT (MODE1 bit5) etkin olduğundan startCh'den itibaren
+//  3 kanalın PWM kayıtları tek paket halinde yazılır (bacak başına 1
+//  transaction). Değerler donanım limitine (s->servoMin..servoMax)
+//  sıkıştırılır.
+// ────────────────────────────────────────────────────────────────
+void pca9685SetLeg(uint8_t addr, uint8_t startCh,
+                   uint16_t pwm0, uint16_t pwm1, uint16_t pwm2,
+                   const RobotSettings* s) {  // OPT: v3.2
+  // Değerleri donanım limitine sıkıştır
+  pwm0 = (uint16_t)constrain((int)pwm0, (int)s->servoMin, (int)s->servoMax);
+  pwm1 = (uint16_t)constrain((int)pwm1, (int)s->servoMin, (int)s->servoMax);
+  pwm2 = (uint16_t)constrain((int)pwm2, (int)s->servoMin, (int)s->servoMax);
+
+  uint8_t reg = LED0_ON_L + 4u * startCh;
+
+  xSemaphoreTake(wireMutex, portMAX_DELAY);
+  Wire.beginTransmission(addr);
+  Wire.write(reg);
+  // CH0
+  Wire.write(0x00); Wire.write(0x00);
+  Wire.write((uint8_t)(pwm0 & 0xFF)); Wire.write((uint8_t)(pwm0 >> 8));
+  // CH1
+  Wire.write(0x00); Wire.write(0x00);
+  Wire.write((uint8_t)(pwm1 & 0xFF)); Wire.write((uint8_t)(pwm1 >> 8));
+  // CH2
+  Wire.write(0x00); Wire.write(0x00);
+  Wire.write((uint8_t)(pwm2 & 0xFF)); Wire.write((uint8_t)(pwm2 >> 8));
+  Wire.endTransmission();
+  xSemaphoreGive(wireMutex);
+}
+
+// ────────────────────────────────────────────────────────────────
 // angleToPWM — Açı (°) → PWM birimi dönüşümü
 //
 //  –90° → servoMin   0° → orta   +90° → servoMax
@@ -105,7 +139,17 @@ void writeAngles(uint8_t legIdx, const RobotSettings* s) {
   float tibiaFinal = constrain(a.tibia
                               + (float)s->servoTrim[legIdx][2], -90.0f, 90.0f);
 
-  pca9685SetPWM(sm.addr, sm.coxa,  angleToPWM(coxaFinal,  s), s);
-  pca9685SetPWM(sm.addr, sm.femur, angleToPWM(femurFinal, s), s);
-  pca9685SetPWM(sm.addr, sm.tibia, angleToPWM(tibiaFinal, s), s);
+  uint16_t pwmCoxa  = angleToPWM(coxaFinal,  s);
+  uint16_t pwmFemur = angleToPWM(femurFinal, s);
+  uint16_t pwmTibia = angleToPWM(tibiaFinal, s);
+
+  // OPT: v3.2 — Kanallar ardışıksa tek I2C transaction (bacak başına 3→1)
+  if (sm.femur == sm.coxa + 1 && sm.tibia == sm.coxa + 2) {
+    pca9685SetLeg(sm.addr, sm.coxa, pwmCoxa, pwmFemur, pwmTibia, s);
+  } else {
+    // Fallback: ardışık değilse eski tek-tek yazım
+    pca9685SetPWM(sm.addr, sm.coxa,  pwmCoxa,  s);
+    pca9685SetPWM(sm.addr, sm.femur, pwmFemur, s);
+    pca9685SetPWM(sm.addr, sm.tibia, pwmTibia, s);
+  }
 }

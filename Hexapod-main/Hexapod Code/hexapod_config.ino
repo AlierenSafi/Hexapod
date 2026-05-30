@@ -145,6 +145,28 @@ void loadConfiguration() {
 }
 
 // ────────────────────────────────────────────────────────────────
+// CRC32 + dirty-flag — gereksiz NVS/Flash yazımını önler (OPT: v3.2)
+//
+//  saveConfiguration() her çağrıldığında ~18+ key Flash'a yazıyordu.
+//  Aynı veriyi tekrar yazmak Flash ömrünü tüketir. RobotSettings'in
+//  WiFi credential'ları HARİÇ kısmının CRC32'si alınır; bir önceki
+//  kayıtla aynıysa yazım atlanır.
+// ────────────────────────────────────────────────────────────────
+#include <stddef.h>   // offsetof
+
+static uint32_t savedConfigCRC = 0;
+
+static uint32_t crc32(const uint8_t* data, size_t len) {
+  uint32_t crc = 0xFFFFFFFF;
+  while (len--) {
+    crc ^= *data++;
+    for (int i = 0; i < 8; i++)
+      crc = (crc >> 1) ^ (0xEDB88320 & -(crc & 1));
+  }
+  return ~crc;
+}
+
+// ────────────────────────────────────────────────────────────────
 // saveConfiguration — Tüm cfg'yi NVS'e yazar
 //
 //  Dikkat: Bu fonksiyon yavaştır (~100ms), Core1 döngüsünden
@@ -156,6 +178,16 @@ void saveConfiguration() {
   xSemaphoreTake(configMutex, portMAX_DELAY);
   snap = cfg;
   xSemaphoreGive(configMutex);
+
+  // OPT: v3.2 — Dirty-flag: değişiklik yoksa Flash yazımını atla
+  // (WiFi credential'ları CRC'ye dahil edilmez — ayrı namespace'te yönetilir)
+  uint32_t currentCRC = crc32((const uint8_t*)&snap,
+                              offsetof(RobotSettings, wifiSSID));
+  if (currentCRC == savedConfigCRC) {
+    Serial.println(F("[CFG] Değişiklik yok — NVS yazımı atlandı."));
+    return;
+  }
+  savedConfigCRC = currentCRC;
 
   if (!prefs.begin("hexapod", false)) {
     Serial.println(F("[CFG] HATA: NVS açılamadı!"));

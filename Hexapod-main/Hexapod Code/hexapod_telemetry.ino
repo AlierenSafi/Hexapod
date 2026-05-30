@@ -37,60 +37,55 @@ void sendFastTelemetry() {
   if (now - lastFastTeleMs < cfg.telemetryRateMs) return;
   lastFastTeleMs = now;
   
-  // Thread-safe snapshot al
-  RobotSettings snap;
+  // OPT: v3.2 — Thread-safe IMU snapshot (configMutex snapshot kaldırıldı)
   IMUData imuSnap;
-  LegState legSnap[6];
-  
-  xSemaphoreTake(configMutex, portMAX_DELAY);
-  snap = cfg;
-  xSemaphoreGive(configMutex);
-  
   xSemaphoreTake(imuMutex, portMAX_DELAY);
   imuSnap = imuData;
   xSemaphoreGive(imuMutex);
-  
-  // Leg state snapshot (mutex gerekmez, sadece Core1 yazıyor, okuma atomic)
-  for (int i = 0; i < 6; i++) {
-    legSnap[i] = legs[i];
-  }
-  
-  // JSON oluştur
-  StaticJsonDocument<768> doc;
-  
-  doc["t"] = "fast";
-  doc["ts"] = now;
-  
-  // IMU
-  JsonObject imu = doc.createNestedObject("imu");
-  imu["p"] = round2(imuSnap.pitch);
-  imu["r"] = round2(imuSnap.roll);
-  imu["ax"] = round3(imuSnap.ax);
-  imu["ay"] = round3(imuSnap.ay);
-  imu["az"] = round3(imuSnap.az);
-  
-  // Gait state
-  doc["gait"] = (int)currentGait;
-  doc["moving"] = isMoving();
-  
-  // Legs (6 bacak)
-  JsonArray legsArr = doc.createNestedArray("legs");
-  for (int i = 0; i < 6; i++) {
-    JsonObject leg = legsArr.createNestedObject();
-    leg["ph"] = round2(legSnap[i].phase);
-    leg["sw"] = legSnap[i].isSwing;
-    leg["fx"] = round1(legSnap[i].footPos.x);
-    leg["fy"] = round1(legSnap[i].footPos.y);
-    leg["fz"] = round1(legSnap[i].footPos.z);
-    leg["cx"] = round1(legSnap[i].angles.coxa);
-    leg["fm"] = round1(legSnap[i].angles.femur);
-    leg["tb"] = round1(legSnap[i].angles.tibia);
-  }
-  
-  // Serialize ve gönder
-  size_t n = serializeJson(doc, teleBuffer, sizeof(teleBuffer));
-  if (n < sizeof(teleBuffer) - 1) {
-    // Broadcast fonksiyonu yok, hexapod_wifi.ino'daki broadcastTelemetry kullanılacak
+
+  // Leg snapshot (Core1 yazar, Core0 okur — telemetri için torn read kabul edilir)
+  LegState legSnap[6];
+  memcpy(legSnap, legs, sizeof(legSnap));
+
+  // OPT: v3.2 — snprintf ile JSON üret (heap/stack allocation yok; teleBuffer static).
+  // Geriye dönük uyum: bacak başına cx/fm/tb (coxa/femur/tibia) eklem açıları korunur.
+  int n = snprintf(teleBuffer, sizeof(teleBuffer),
+    "{\"t\":\"fast\",\"ts\":%lu,"
+    "\"imu\":{\"p\":%.2f,\"r\":%.2f,\"ax\":%.3f,\"ay\":%.3f,\"az\":%.3f},"
+    "\"gait\":%d,\"moving\":%s,"
+    "\"legs\":["
+    "{\"ph\":%.2f,\"sw\":%s,\"fx\":%.1f,\"fy\":%.1f,\"fz\":%.1f,\"cx\":%.1f,\"fm\":%.1f,\"tb\":%.1f},"
+    "{\"ph\":%.2f,\"sw\":%s,\"fx\":%.1f,\"fy\":%.1f,\"fz\":%.1f,\"cx\":%.1f,\"fm\":%.1f,\"tb\":%.1f},"
+    "{\"ph\":%.2f,\"sw\":%s,\"fx\":%.1f,\"fy\":%.1f,\"fz\":%.1f,\"cx\":%.1f,\"fm\":%.1f,\"tb\":%.1f},"
+    "{\"ph\":%.2f,\"sw\":%s,\"fx\":%.1f,\"fy\":%.1f,\"fz\":%.1f,\"cx\":%.1f,\"fm\":%.1f,\"tb\":%.1f},"
+    "{\"ph\":%.2f,\"sw\":%s,\"fx\":%.1f,\"fy\":%.1f,\"fz\":%.1f,\"cx\":%.1f,\"fm\":%.1f,\"tb\":%.1f},"
+    "{\"ph\":%.2f,\"sw\":%s,\"fx\":%.1f,\"fy\":%.1f,\"fz\":%.1f,\"cx\":%.1f,\"fm\":%.1f,\"tb\":%.1f}]}",
+    (unsigned long)now,
+    imuSnap.pitch, imuSnap.roll,
+    imuSnap.ax, imuSnap.ay, imuSnap.az,
+    (int)currentGait,
+    isMoving() ? "true" : "false",
+    legSnap[0].phase, legSnap[0].isSwing ? "true" : "false",
+      legSnap[0].footPos.x, legSnap[0].footPos.y, legSnap[0].footPos.z,
+      legSnap[0].angles.coxa, legSnap[0].angles.femur, legSnap[0].angles.tibia,
+    legSnap[1].phase, legSnap[1].isSwing ? "true" : "false",
+      legSnap[1].footPos.x, legSnap[1].footPos.y, legSnap[1].footPos.z,
+      legSnap[1].angles.coxa, legSnap[1].angles.femur, legSnap[1].angles.tibia,
+    legSnap[2].phase, legSnap[2].isSwing ? "true" : "false",
+      legSnap[2].footPos.x, legSnap[2].footPos.y, legSnap[2].footPos.z,
+      legSnap[2].angles.coxa, legSnap[2].angles.femur, legSnap[2].angles.tibia,
+    legSnap[3].phase, legSnap[3].isSwing ? "true" : "false",
+      legSnap[3].footPos.x, legSnap[3].footPos.y, legSnap[3].footPos.z,
+      legSnap[3].angles.coxa, legSnap[3].angles.femur, legSnap[3].angles.tibia,
+    legSnap[4].phase, legSnap[4].isSwing ? "true" : "false",
+      legSnap[4].footPos.x, legSnap[4].footPos.y, legSnap[4].footPos.z,
+      legSnap[4].angles.coxa, legSnap[4].angles.femur, legSnap[4].angles.tibia,
+    legSnap[5].phase, legSnap[5].isSwing ? "true" : "false",
+      legSnap[5].footPos.x, legSnap[5].footPos.y, legSnap[5].footPos.z,
+      legSnap[5].angles.coxa, legSnap[5].angles.femur, legSnap[5].angles.tibia
+  );
+
+  if (n > 0 && n < (int)sizeof(teleBuffer)) {
     broadcastTelemetry(teleBuffer);
   }
 }

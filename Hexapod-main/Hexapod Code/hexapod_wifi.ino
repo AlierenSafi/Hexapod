@@ -47,6 +47,7 @@ static WebSocketsServer webSocket = WebSocketsServer(WS_PORT);
 static uint32_t lastReconnectAttempt = 0;
 static uint32_t reconnectDelay = WIFI_RECONNECT_DELAY;
 static bool apModeActive = false;
+static uint8_t wsClientCount = 0;   // OPT: v3.2 — gerçek WS client sayısı
 
 // ════════════════════════════════════════════════════════════════
 // İLERİ BİLDİRİMLER
@@ -169,6 +170,7 @@ void wifiLoop() {
 void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
   switch (type) {
     case WStype_CONNECTED:
+      if (wsClientCount < 255) wsClientCount++;   // OPT: v3.2
       Serial.printf("[WS] Client #%u bağlandı from %s\n", 
                     num, webSocket.remoteIP(num).toString().c_str());
       
@@ -188,6 +190,7 @@ void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t 
       break;
       
     case WStype_DISCONNECTED:
+      if (wsClientCount > 0) wsClientCount--;   // OPT: v3.2
       Serial.printf("[WS] Client #%u bağlantı kesti\n", num);
       break;
       
@@ -528,7 +531,6 @@ bool hasAuthenticatedClient() {
 }
 
 uint32_t getClientCount() {
-  // WebSocketsServer kütüphanesinde client sayısı doğrudan alınamıyor
-  // Şimdilik 0 döndürüyoruz
-  return 0;
+  // OPT: v3.2 — WStype_CONNECTED/DISCONNECTED ile sayılan gerçek client adedi
+  return wsClientCount;
 }

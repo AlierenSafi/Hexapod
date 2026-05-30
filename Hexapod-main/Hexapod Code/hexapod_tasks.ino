@@ -56,6 +56,7 @@ void taskSensorComm(void* param) {
   battInit();
 
   uint32_t lastMs = millis();
+  static uint8_t imuSkipCount = 0;   // OPT: v3.2 — IMU 50Hz (2 döngüde 1)
 
   while (true) {
     // ── Delta zaman ───────────────────────────────────────────────
@@ -76,8 +77,10 @@ void taskSensorComm(void* param) {
     // ── Batarya izleme (1Hz, içsel kontrol) ───────────────────────
     battLoop();
 
-    // ── IMU: cfg snapshot ile filtre güncelle ─────────────────────
-    if (mpuAvailable) {
+    // ── IMU: cfg snapshot ile filtre güncelle (50Hz — 2 döngüde 1) ─
+    // OPT: v3.2 — IMU 100Hz yerine 50Hz okunur (I2C/CPU yükü ~yarıya iner)
+    if (mpuAvailable && (++imuSkipCount >= 2)) {
+      imuSkipCount = 0;
       // configMutex'i kısa süre al ve compAlpha'yı oku
       float alpha;
       xSemaphoreTake(configMutex, portMAX_DELAY);
@@ -87,7 +90,7 @@ void taskSensorComm(void* param) {
       // Minimal inline güncelleme (tam snapshot gereksiz)
       RobotSettings imuSnap;
       imuSnap.compAlpha = alpha;
-      updateCompFilter(dt, &imuSnap);
+      updateCompFilter(dt * 2.0f, &imuSnap);  // OPT: v3.2 — dt iki katı (50Hz)
     }
 
     // ── NRF24: Gelen paketleri boşalt ────────────────────────────
@@ -152,6 +155,8 @@ void taskKinematics(void* param) {
   xSemaphoreTake(configMutex, portMAX_DELAY);
   snap = cfg;
   xSemaphoreGive(configMutex);
+
+  static float zOff[6] = {};   // OPT: v3.2 — döngü dışı (stack→.bss, taşma payı)
 
   while (true) {
     // ── Kesin 20ms zamanlama (50Hz, jitter ~0.5ms) ────────────────
@@ -224,7 +229,7 @@ void taskKinematics(void* param) {
     }
 
     // ── Auto-leveling Z offsetleri ────────────────────────────────
-    float zOff[6] = {};
+    memset(zOff, 0, sizeof(zOff));   // OPT: v3.2 — static buffer sıfırla
     if (mpuAvailable) {
       computeLevelingOffset(0.020f, &snap, zOff);
     }

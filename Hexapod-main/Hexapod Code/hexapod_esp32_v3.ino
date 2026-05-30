@@ -507,6 +507,9 @@ void setup() {
   }
   Serial.println(F("[RTOS] 4× Mutex oluşturuldu."));
 
+  // ── 3.5 Task Watchdog (TWDT) başlat ─────────────────────────────
+  wdtInit();   // OPT: v3.2 — hexapod_watchdog.ino (task'lardan önce)
+
   // ── 4. Konfigürasyonu yükle (varsayılan → NVS üstüne yaz) ───────
   loadConfiguration();   // hexapod_config.ino
 

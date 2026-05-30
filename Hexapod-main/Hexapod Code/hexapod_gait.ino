@@ -92,7 +92,12 @@ void sitDown() {
         writeAngles(i, &s);
       }
     }
-    delay(16);
+    // OPT: v3.2 — Scheduler aktifse vTaskDelay (CPU'yu bloklamadan beklet)
+    if (xTaskGetCurrentTaskHandle() != nullptr) {
+      vTaskDelay(pdMS_TO_TICKS(16));
+    } else {
+      delay(16);
+    }
   }
 
   Serial.println(F("[GAIT] Oturma tamamlandı."));

@@ -31,7 +31,7 @@ extern WiFiState wifiState;
 // SABİTLER
 // ════════════════════════════════════════════════════════════════
 
-#define BATT_ADC_SAMPLES      32      // Oversampling sayısı
+#define BATT_ADC_SAMPLES      16      // OPT: v3.2 — 32→16 (moving avg zaten filtreler)
 #define BATT_FILTER_SIZE      8       // Moving average pencere boyutu
 #define BATT_READ_INTERVAL_MS 1000    // Okuma aralığı (1Hz)
 
@@ -109,8 +109,7 @@ float battReadVoltage() {
   // Oversampling
   uint32_t adcSum = 0;
   for (int i = 0; i < BATT_ADC_SAMPLES; i++) {
-    adcSum += adc1_get_raw(ADC1_CHANNEL_0);
-    delayMicroseconds(100);  // Kısa bekleme
+    adcSum += adc1_get_raw(ADC1_CHANNEL_0);   // OPT: v3.2 — blocking delayMicroseconds kaldırıldı
   }
   uint32_t adcAvg = adcSum / BATT_ADC_SAMPLES;
   
