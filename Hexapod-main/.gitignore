@@ -1,0 +1,80 @@
+# Build artifacts
+build/
+*.o
+*.elf
+*.bin
+*.hex
+*.map
+*.lst
+*.d
+
+# Arduino IDE
+*.eep
+*.elf
+*.hex
+*.bin
+*.elf
+*.hex
+
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+.clang_complete
+.gcc-flags.json
+
+# IDE
+.vscode/
+.idea/
+*.uvoptx
+*.uvprojx
+*.uvguix.*
+Debug/
+Release/
+*.launch
+
+# KiCad
+*-backups/
+*.bak
+*.kicad_pcb-bak
+*.kicad_sch-bak
+*.kicad_prl
+*.net
+fp-info-cache
+_autosave-*
+
+# Gerber production files (optional - uncomment if you want to ignore)
+# gerber/
+# production/
+# fabrication/
+
+# Simulation
+*.raw
+*.log
+*.fft
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Backup files
+*.bak
+*.swp
+*.swo
+*~
+
+# Python (if used for tools/scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Documentation build
+docs/_build/
+
+# Secrets (never commit!)
+secrets.h
+config_private.h
+wifi_credentials.h
