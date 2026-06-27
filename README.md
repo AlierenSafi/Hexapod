@@ -120,27 +120,24 @@ Servo Range: 500μs - 2500μs (0-180°)
 ### Project Structure
 
 ```
-hexapod_esp32_v3/
-├── src/
-│   ├── hexapod_esp32_v3.ino    # Main entry point
-│   ├── hexapod_config.ino      # NVS configuration
-│   ├── hexapod_wifi.ino        # WiFi + WebSocket server
-│   ├── hexapod_comm.ino        # BLE/NRF24 communication
-│   ├── hexapod_telemetry.ino   # Telemetry system
-│   ├── hexapod_battery.ino     # Battery management
-│   ├── hexapod_watchdog.ino    # Watchdog & fault recovery
-│   ├── hexapod_tasks.ino       # FreeRTOS tasks
-│   ├── hexapod_imu.ino         # IMU sensor & filtering
-│   ├── hexapod_gait.ino        # Gait algorithms
-│   ├── hexapod_ik.ino          # Inverse kinematics
-│   ├── hexapod_drivers.ino     # Hardware drivers
-│   ├── hexapod_ota.ino         # OTA updates
-│   └── hexapod_future.ino      # Future features stub
-├── docs/
-│   ├── api_reference.md
-│   ├── hardware_setup.md
-│   └── protocol_spec.md
-├── platformio.ini
+Hexapod/
+├── Hexapod Code/           # Arduino sketch folder containing all source code
+│   ├── hexapod_esp32_v3.ino    # Main entry point (setup / loop / tasks setup)
+│   ├── hexapod_config.ino      # NVS configuration and parameter loading
+│   ├── hexapod_wifi.ino        # WiFi AP/STA modes & WebSocket server
+│   ├── hexapod_comm.ino        # BLE and NRF24 communication & packets parsing
+│   ├── hexapod_telemetry.ino   # JSON telemetry (Fast 10Hz / Slow 1Hz / Events)
+│   ├── hexapod_battery.ino     # Battery voltage monitor and safety FSM
+│   ├── hexapod_watchdog.ino    # Task Watchdog Timer (TWDT) & fault handling
+│   ├── hexapod_tasks.ino       # Core0/Core1 FreeRTOS tasks implementation
+│   ├── hexapod_imu.ino         # MPU6050 complementary filter & PID leveling
+│   ├── hexapod_gait.ino        # Gait planning & transition trajectories
+│   ├── hexapod_ik.ino          # Analytical 3DOF Inverse Kinematics solver
+│   ├── hexapod_drivers.ino     # PCA9685 I2C servo drivers abstraction
+│   ├── hexapod_ota.ino         # WiFi OTA update management task
+│   └── hexapod_future.ino      # Stubs for autonomous behaviors & controllers
+├── LICENSE
+├── CONTRIBUTING.md
 └── README.md
 ```
 
@@ -338,6 +335,14 @@ GPIO36  ---->  ADC (with voltage divider 20k/10k)
 - [ ] SLAM support
 - [ ] Autonomous navigation
 - [ ] Machine learning gait optimization
+
+### Recent Bug Fixes (v3.1.0)
+
+- **Inverse Kinematics Math Fixes**: Corrected the Tibia angle calculation to use `-acosf(cosT2)` instead of `acosf(cosT2) - M_PI` (preventing it from being pinned at the software limit of `-90°`). Corrected the Femur angle reference by setting `alpha = atan2f(Z, L)` instead of `atan2f(-Z, L)`, which correctly makes the femur point downwards instead of upwards.
+- **IMU Gyro Axis Swap**: Resolved a complementary filter bug in `hexapod_imu.ino` where roll rate (`gx`) updated pitch and pitch rate (`gy`) updated roll.
+- **Watchdog Timer (TWDT) Activation**: Fixed missing initialization of the task watchdog by calling `wdtInit()` inside `setup()`.
+- **Robust BLE JSON Parser**: Replaced the fragile custom string slicing in `hexapod_comm.ino` with standard robust parsing via `ArduinoJson`.
+- **Connected Clients Count**: Replaced the hardcoded `0` return in `getClientCount()` with the actual `webSocket.connectedClients()` library call.
 
 ##  License
 
