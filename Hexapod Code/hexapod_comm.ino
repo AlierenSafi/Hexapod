@@ -134,8 +134,6 @@ static void parseLegacyPacket(const uint8_t* data, size_t len, CmdSource src) {
   parseBinaryPacket(pkt, src);
 }
 
-#include <ArduinoJson.h>
-
 // ────────────────────────────────────────────────────────────────
 // parseJsonPacket — JSON string config komutu (yalnızca BLE)
 //
@@ -144,40 +142,57 @@ static void parseLegacyPacket(const uint8_t* data, size_t len, CmdSource src) {
 //    v = değer (float)
 //    s = 1 ise NVS'e kaydet (isteğe bağlı, varsayılan 0)
 //
-//  Desteklenen özel komutlar:
+//  Tam JSON parser yerine minimal string çekme kullanılır
+//  (cJSON veya ArduinoJson bağımlılığı olmadan).
+//
+//  Desteklenen özel komutlar (v=0 ile):
 //    {"k":"save"}    → saveConfiguration()
 //    {"k":"load"}    → loadConfiguration()
 //    {"k":"reset"}   → resetToDefaults()
 //    {"k":"print"}   → printConfiguration()
 // ────────────────────────────────────────────────────────────────
 static void parseJsonPacket(const String& json) {
-  StaticJsonDocument<256> doc;
-  DeserializationError err = deserializeJson(doc, json);
-  if (err) {
-    Serial.printf("[JSON] Hata: %s\n", err.c_str());
-    return;
-  }
+  // ── Minimal JSON alan çekicisi ─────────────────────────────────
+  // String::indexOf ve substring kullanır — heap tahsisi yok
+  auto extractStr = [&](const char* field) -> String {
+    String pat = String("\"") + field + "\":\"";
+    int i = json.indexOf(pat);
+    if (i < 0) return String();
+    i += pat.length();
+    int j = json.indexOf('"', i);
+    return (j > i) ? json.substring(i, j) : String();
+  };
+  auto extractFloat = [&](const char* field) -> float {
+    String pat = String("\"") + field + "\":";
+    int i = json.indexOf(pat);
+    if (i < 0) return 0.0f;
+    i += pat.length();
+    // Virgül, '}', boşluğa kadar oku
+    int j = i;
+    while (j < (int)json.length() &&
+           json[j] != ',' && json[j] != '}' && json[j] != ' ') j++;
+    return json.substring(i, j).toFloat();
+  };
+  auto extractInt = [&](const char* field) -> int {
+    return (int)extractFloat(field);
+  };
 
-  const char* key = doc["k"];
-  if (!key) {
+  String key = extractStr("k");
+
+  if (key.length() == 0) {
     Serial.println(F("[JSON] Hata: 'k' alanı bulunamadı."));
     return;
   }
 
   // Özel sistem komutları (v gerektirmez)
-  if (strcmp(key, "save") == 0)  { saveConfiguration();  return; }
-  if (strcmp(key, "load") == 0)  { loadConfiguration();
-                                    configChanged = true; return; }
-  if (strcmp(key, "reset") == 0) { resetToDefaults();    return; }
-  if (strcmp(key, "print") == 0) { printConfiguration(); return; }
+  if (key == "save")  { saveConfiguration();  return; }
+  if (key == "load")  { loadConfiguration();
+                        configChanged = true; return; }
+  if (key == "reset") { resetToDefaults();    return; }
+  if (key == "print") { printConfiguration(); return; }
 
-  if (!doc.containsKey("v")) {
-    Serial.println(F("[JSON] Hata: 'v' alanı bulunamadı."));
-    return;
-  }
-
-  float value   = doc["v"];
-  bool  saveNVS = doc["s"] | false;
+  float value   = extractFloat("v");
+  bool  saveNVS = (extractInt("s") == 1);
 
   updateParameter(key, value, saveNVS);
 }

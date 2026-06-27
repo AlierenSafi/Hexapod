@@ -54,11 +54,11 @@ bool solveIK(uint8_t legIdx, const Vec3& target, const RobotSettings* s) {
                 / (2.0f * s->femurLen * s->tibiaLen);
   cosT2 = constrain(cosT2, -1.0f, 1.0f);
   // Servo referansı: tam uzanım = 0°, dik bükülmüş ≈ –90°
-  a.tibia = -RAD_TO_DEG * acosf(cosT2);
+  a.tibia = RAD_TO_DEG * (acosf(cosT2) - (float)M_PI);
 
   // ── Femur (Kosinüs Teoremi + zemin referansı açısı) ──────────
-  // α: yatay referanstan hedefe açı (Z negatif → ayak aşağıda, alpha negatif)
-  float alpha = atan2f(Z, L);
+  // α: yatay referanstan hedefe açı (Z negatif → ayak aşağıda)
+  float alpha = atan2f(-Z, L);
 
   float cosT1 = (D*D + s->femurLen*s->femurLen - s->tibiaLen*s->tibiaLen)
                 / (2.0f * D * s->femurLen);

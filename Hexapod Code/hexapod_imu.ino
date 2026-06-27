@@ -96,8 +96,8 @@ void updateCompFilter(float dt, const RobotSettings* s) {
   float alpha = s->compAlpha;   // cfg'den dinamik oku
 
   xSemaphoreTake(imuMutex, portMAX_DELAY);
-  imuData.pitch = alpha * (imuData.pitch + gy * dt) + (1.0f - alpha) * accPitch;
-  imuData.roll  = alpha * (imuData.roll  + gx * dt) + (1.0f - alpha) * accRoll;
+  imuData.pitch = alpha * (imuData.pitch + gx * dt) + (1.0f - alpha) * accPitch;
+  imuData.roll  = alpha * (imuData.roll  + gy * dt) + (1.0f - alpha) * accRoll;
   imuData.ax = ax; imuData.ay = ay; imuData.az = az;
   imuData.gx = gx; imuData.gy = gy; imuData.gz = gz;
   xSemaphoreGive(imuMutex);

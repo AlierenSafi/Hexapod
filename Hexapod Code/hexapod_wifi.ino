@@ -528,5 +528,7 @@ bool hasAuthenticatedClient() {
 }
 
 uint32_t getClientCount() {
-  return webSocket.connectedClients();
+  // WebSocketsServer kütüphanesinde client sayısı doğrudan alınamıyor
+  // Şimdilik 0 döndürüyoruz
+  return 0;
 }
