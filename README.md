@@ -1,9 +1,11 @@
 # ESP32 Hexapod Robot Controller
 
+![Hexapod Concept Banner](hexapod_concept.jpg)
+
 This repository contains the firmware for an 18-DOF (Degree of Freedom) hexapod walking robot powered by the ESP32. It handles inverse kinematics, leg coordination, balance leveling, and multiple remote control interfaces in real-time.
 
 There are two versions of this project available in this repository:
-- **`main` branch**: The optimized classic Arduino version using a modular `.ino` structure.
+- **`main` branch** (This branch): The optimized classic Arduino version using a modular `.ino` structure.
 - **`feature/freertos-native-architecture` branch**: A native FreeRTOS version structured into clean C++ header and source files (`.h`/`.cpp`) using advanced RTOS queues and event groups.
 
 ---
@@ -14,8 +16,16 @@ There are two versions of this project available in this repository:
 - **Davenport Auto-Leveling**: Dynamic body leveling using an MPU6050 IMU and PID correction.
 - **Smooth Gait Generation**: Support for Tripod, Ripple, and Wave gaits using cycloid trajectories.
 - **Multiple Control Interfaces**: Control the robot using a Web App (WebSockets), BLE, or an NRF24L01+ physical remote.
-- **Wireless Updates (OTA)**: Upload firmware updates wirelessly over WiFi.
+- **Wireless Updates (OTA)**: Upload firmware upgrades wirelessly over WiFi.
 - **Safety Watchdog**: Built-in hardware watchdog timer (TWDT) and battery protection to shut down servos if power gets too low.
+
+---
+
+## Kinematics & Coordinate System
+
+Below is the layout of the leg coordinates, joint angles ($\alpha, \beta, \gamma$), and leg numbering configurations:
+
+![Hexapod Kinematics Diagram](hexapod_kinematics_concept.jpg)
 
 ---
 
@@ -29,28 +39,15 @@ Below is the wiring schematic showing the connection between the ESP32, PCA9685 
 
 ## Project Structure
 
-Depending on the branch you are on, the files are structured as follows:
-
-### Classic Arduino (Main Branch)
-The code in the `Hexapod Code` folder uses standard Arduino IDE compilation:
-- `hexapod_esp32_v3.ino`: Setup, main loop, and global states.
+On this branch, the files inside the `Hexapod Code` folder use standard modular `.ino` structure:
+- `hexapod_esp32_v3.ino`: Main setup, loop, global variables, and task registration.
 - `hexapod_tasks.ino`: Core 0 (sensors/comm) and Core 1 (kinematics) task loops.
-- `hexapod_drivers.ino`: PCA9685 I2C servo drivers.
-- `hexapod_ik.ino` & `hexapod_gait.ino`: Kinematics, cycloid steps, and gait planning.
-- `hexapod_wifi.ino` & `hexapod_comm.ino`: WebSockets, WiFi, BLE, and NRF24 handlers.
-- `hexapod_config.ino`: NVS parameter storage with CRC32 flash protection.
-- `hexapod_battery.ino` & `hexapod_watchdog.ino`: Power management and safety monitors.
-- `hexapod_telemetry.ino`: Real-time fast/slow data telemetry.
-
-### Native FreeRTOS (FreeRTOS Branch)
-The code in the `Hexapod_FreeRTOS` folder is rewritten into modular C++ classes:
-- `Hexapod_FreeRTOS.ino`: Entry point initializing tasks, queues, and event groups.
-- `robot_config.h` / `.cpp`: Settings lifecycle and NVS flash writes.
-- `servo_drivers.h` / `.cpp`: PCA9685 I2C writes with auto-increment optimization.
-- `kinematics.h` / `.cpp`: Gait engine and IK calculations.
-- `communication.h` / `.cpp`: Dynamic WebSocket client tracking, BLE, and NRF24.
-- `battery_monitor.h` / `.cpp`: Oversampled ADC reading and low-voltage auto-shutdown.
-- `watchdog_safety.h` / `.cpp`: Task WDT feed, comm timeout, and recovery cooldown.
+- `hexapod_drivers.ino`: PCA9685 I2C driver utilizing auto-increment write optimizations.
+- `hexapod_ik.ino` & `hexapod_gait.ino`: Kinematics equations, cycloid step generation, and gait plans.
+- `hexapod_wifi.ino` & `hexapod_comm.ino`: WiFi connection, WebSockets handling, BLE, and NRF24 receiver.
+- `hexapod_config.ino`: Settings loading/saving from NVS protected by CRC32 check.
+- `hexapod_battery.ino` & `hexapod_watchdog.ino`: Power tracking and TWDT system safety.
+- `hexapod_telemetry.ino`: Real-time fast/slow telemetry serialization.
 
 ---
 
@@ -63,7 +60,7 @@ To compile the code, you will need the following libraries installed in your Ard
 - **RF24** (by TMRh20 - optional, for physical remote control)
 
 ### Uploading the Code
-1. Open the main `.ino` sketch folder in Arduino IDE.
+1. Open `hexapod_esp32_v3.ino` inside the `Hexapod Code` folder in Arduino IDE.
 2. Under **Tools**, configure the ESP32 partition scheme to **Minimal SPIFFS (1.9MB APP)**.
 3. Select your ESP32 Dev Module port.
 4. Click **Upload**.
