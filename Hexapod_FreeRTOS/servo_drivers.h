@@ -18,6 +18,7 @@ extern const Vec2 LEG_ORIGIN[6];
 extern const int8_t LEG_DIR[6];
 extern const ServoMap LEG_SERVO[6];
 extern SemaphoreHandle_t wireMutex;
+extern bool pcaAvailable;
 
 // Eklem açıları yapısı (aynı zamanda kinematics modülünde de kullanılır)
 struct JointAngles {

@@ -65,10 +65,12 @@ void sendSlowTelemetry() {
   snprintf(teleBuffer, sizeof(teleBuffer),
     "{\"t\":\"slow\",\"ts\":%lu,\"batt\":{\"v\":%.2f,\"pct\":%d,\"lvl\":%d},"
     "\"wifi\":{\"rssi\":%d,\"connected\":%d},"
+    "\"hw\":{\"imu\":%d,\"pca\":%d,\"nrf\":%d},"
     "\"sys\":{\"up\":%lu,\"heap\":%lu,\"ct\":%d,\"fault\":%d,\"clients\":%lu}}",
     (unsigned long)now,
     battVoltage, (int)battPercent, (int)battFSMState,
     (int)sysState.wifiRSSI, (WiFi.status() == WL_CONNECTED) ? 1 : 0,
+    mpuAvailable ? 1 : 0, pcaAvailable ? 1 : 0, nrfAvailable ? 1 : 0,
     (unsigned long)uptimeSec, (unsigned long)sysState.freeHeap,
     sysState.commTimeout ? 1 : 0, (int)sysState.faultCode,
     (unsigned long)getClientCount()

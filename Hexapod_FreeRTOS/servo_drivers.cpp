@@ -3,6 +3,7 @@
 
 SemaphoreHandle_t wireMutex = nullptr;
 LegState legs[6];
+bool pcaAvailable = false;
 
 // Static mappings
 const int8_t LEG_DIR[6] = {1, 1, 1, -1, -1, -1};
@@ -38,6 +39,7 @@ void pca9685Init(uint8_t addr) {
     Serial.printf("[DRV] ERROR: PCA9685 0x%02X not responding (err=%d)\n", addr, err);
     return;
   }
+  pcaAvailable = true;
   delay(5);
 
   uint8_t prescale = (uint8_t)(25000000.0f / (4096.0f * (float)SERVO_FREQ) - 0.5f);

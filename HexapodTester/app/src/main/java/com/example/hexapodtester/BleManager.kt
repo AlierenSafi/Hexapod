@@ -18,15 +18,25 @@ enum class ConnectionState {
     DISCONNECTED, CONNECTING, CONNECTED
 }
 
+enum class TestStatus {
+    PENDING, PASSED, FAILED, SKIPPED
+}
+
 data class TestResults(
-    val connectionPassed: Boolean = false,
-    val commandTxPassed: Boolean = false,
-    val telemetryRxPassed: Boolean = false,
-    val batteryPassed: Boolean = false,
-    val imuPassed: Boolean = false
+    val connectionStatus: TestStatus = TestStatus.PENDING,
+    val commandTxStatus: TestStatus = TestStatus.PENDING,
+    val telemetryRxStatus: TestStatus = TestStatus.PENDING,
+    val batteryStatus: TestStatus = TestStatus.PENDING,
+    val imuStatus: TestStatus = TestStatus.PENDING,
+    val pcaStatus: TestStatus = TestStatus.PENDING
 ) {
     val allPassed: Boolean
-        get() = connectionPassed && commandTxPassed && telemetryRxPassed && batteryPassed && imuPassed
+        get() = (connectionStatus == TestStatus.PASSED || connectionStatus == TestStatus.SKIPPED) &&
+                (commandTxStatus == TestStatus.PASSED || commandTxStatus == TestStatus.SKIPPED) &&
+                (telemetryRxStatus == TestStatus.PASSED || telemetryRxStatus == TestStatus.SKIPPED) &&
+                (batteryStatus == TestStatus.PASSED || batteryStatus == TestStatus.SKIPPED) &&
+                (imuStatus == TestStatus.PASSED || imuStatus == TestStatus.SKIPPED) &&
+                (pcaStatus == TestStatus.PASSED || pcaStatus == TestStatus.SKIPPED)
 }
 
 @SuppressLint("MissingPermission")
@@ -91,7 +101,7 @@ class BleManager(private val context: Context) {
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
                     _connectionState.value = ConnectionState.CONNECTED
                     log("Connected to ${gatt?.device?.name ?: "Unknown"}")
-                    _testResults.value = _testResults.value.copy(connectionPassed = true)
+                    _testResults.value = _testResults.value.copy(connectionStatus = TestStatus.PASSED)
                     handler.post {
                         gatt?.discoverServices()
                     }
@@ -142,7 +152,7 @@ class BleManager(private val context: Context) {
         override fun onCharacteristicWrite(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?, status: Int) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 log("Command TX Success")
-                _testResults.value = _testResults.value.copy(commandTxPassed = true)
+                _testResults.value = _testResults.value.copy(commandTxStatus = TestStatus.PASSED)
             } else {
                 log("Command TX Failed: status $status")
             }
@@ -204,28 +214,108 @@ class BleManager(private val context: Context) {
         gatt.writeCharacteristic(char)
     }
 
+    fun runAutoTest() {
+        if (_connectionState.value != ConnectionState.CONNECTED) {
+            log("Auto test: Not connected.")
+            return
+        }
+        log("Auto test started.")
+        // Reset results to PENDING (except connection which is PASSED)
+        _testResults.value = TestResults(
+            connectionStatus = TestStatus.PASSED,
+            commandTxStatus = TestStatus.PENDING,
+            telemetryRxStatus = TestStatus.PENDING,
+            batteryStatus = TestStatus.PENDING,
+            imuStatus = TestStatus.PENDING,
+            pcaStatus = TestStatus.PENDING
+        )
+        
+        // 1. Trigger Command Write Test by sending a stop command
+        sendCommand("{\"cmd\":\"motion\",\"x\":0,\"y\":0,\"yaw\":0}")
+        
+        // 2. Schedule a timeout to evaluate pending tests based on hardware presence
+        handler.postDelayed({
+            val current = _testResults.value
+            var updated = current
+            
+            // If telemetry was never received, we can't detect hardware. Mark all pending as FAILED.
+            if (current.telemetryRxStatus == TestStatus.PENDING) {
+                updated = updated.copy(
+                    telemetryRxStatus = TestStatus.FAILED,
+                    batteryStatus = TestStatus.FAILED,
+                    imuStatus = TestStatus.FAILED,
+                    pcaStatus = TestStatus.FAILED
+                )
+            } else {
+                // If telemetry was received, evaluate pending statuses based on detected hardware
+                if (updated.imuStatus == TestStatus.PENDING) {
+                    updated = updated.copy(imuStatus = TestStatus.FAILED)
+                }
+                if (updated.batteryStatus == TestStatus.PENDING) {
+                    updated = updated.copy(batteryStatus = TestStatus.FAILED)
+                }
+                if (updated.pcaStatus == TestStatus.PENDING) {
+                    updated = updated.copy(pcaStatus = TestStatus.FAILED)
+                }
+            }
+            
+            if (updated.commandTxStatus == TestStatus.PENDING) {
+                updated = updated.copy(commandTxStatus = TestStatus.FAILED)
+            }
+            
+            _testResults.value = updated
+            log("Auto test completed. All passed: ${updated.allPassed}")
+        }, 4000) // Wait 4 seconds to receive slow + fast telemetry packets
+    }
+
     private fun parseTelemetry(jsonStr: String) {
         try {
             val json = JSONObject(jsonStr)
-            _testResults.value = _testResults.value.copy(telemetryRxPassed = true)
+            _testResults.value = _testResults.value.copy(telemetryRxStatus = TestStatus.PASSED)
 
             val type = json.optString("t")
             if (type == "fast") {
                 val imu = json.optJSONObject("imu")
-                if (imu != null) {
+                if (imu != null && _testResults.value.imuStatus != TestStatus.SKIPPED) {
                     val pitch = imu.optDouble("p", 0.0)
                     val roll = imu.optDouble("r", 0.0)
                     // If we receive active (non-zero or changing) orientation, pass IMU
                     if (pitch != 0.0 || roll != 0.0) {
-                        _testResults.value = _testResults.value.copy(imuPassed = true)
+                        _testResults.value = _testResults.value.copy(imuStatus = TestStatus.PASSED)
                     }
                 }
             } else if (type == "slow") {
+                // Read hardware availability
+                val hw = json.optJSONObject("hw")
+                if (hw != null) {
+                    val imuOnline = hw.optInt("imu", 0) == 1
+                    val pcaOnline = hw.optInt("pca", 0) == 1
+                    
+                    if (!imuOnline) {
+                        _testResults.value = _testResults.value.copy(imuStatus = TestStatus.SKIPPED)
+                    }
+                    if (!pcaOnline) {
+                        _testResults.value = _testResults.value.copy(pcaStatus = TestStatus.SKIPPED)
+                    } else if (_testResults.value.pcaStatus == TestStatus.PENDING) {
+                        _testResults.value = _testResults.value.copy(pcaStatus = TestStatus.PASSED)
+                    }
+                } else {
+                    // Fallback to skipped if older firmware doesn't report hardware block
+                    _testResults.value = _testResults.value.copy(
+                        imuStatus = TestStatus.SKIPPED,
+                        pcaStatus = TestStatus.SKIPPED
+                    )
+                }
+
                 val batt = json.optJSONObject("batt")
                 if (batt != null) {
                     val voltage = batt.optDouble("v", 0.0)
-                    if (voltage > 6.4) {
-                        _testResults.value = _testResults.value.copy(batteryPassed = true)
+                    if (voltage < 1.0) {
+                        _testResults.value = _testResults.value.copy(batteryStatus = TestStatus.SKIPPED)
+                    } else if (voltage > 6.4) {
+                        _testResults.value = _testResults.value.copy(batteryStatus = TestStatus.PASSED)
+                    } else {
+                        _testResults.value = _testResults.value.copy(batteryStatus = TestStatus.FAILED)
                     }
                 }
             }

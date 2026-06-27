@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import com.example.hexapodtester.BleManager
 import com.example.hexapodtester.ConnectionState
 import com.example.hexapodtester.TestResults
+import com.example.hexapodtester.TestStatus
 
 @SuppressLint("MissingPermission")
 @Composable
@@ -116,6 +117,13 @@ fun MainScreen(
                     }
                 } else {
                     Button(
+                        onClick = { bleManager.runAutoTest() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Auto Test", color = Color.White)
+                    }
+                    Button(
                         onClick = { bleManager.disconnect() },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
                         modifier = Modifier.weight(1f)
@@ -208,7 +216,6 @@ fun MainScreen(
 fun TestStatusPanel(results: TestResults) {
     val allPassed = results.allPassed
     val containerColor = if (allPassed) Color(0xFF1B5E20) else Color(0xFF2C2C2C)
-    val strokeColor = if (allPassed) Color(0xFF4CAF50) else Color(0xFF424242)
 
     Card(
         colors = CardDefaults.cardColors(containerColor = containerColor),
@@ -230,7 +237,7 @@ fun TestStatusPanel(results: TestResults) {
                     fontSize = 20.sp
                 )
                 Text(
-                    text = if (allPassed) "ALL SYSTEM TESTS PASSED" else "SYSTEM TESTING IN PROGRESS",
+                    text = if (allPassed) "ALL DETECTED SYSTEM TESTS PASSED" else "SYSTEM TESTING IN PROGRESS",
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
@@ -239,17 +246,31 @@ fun TestStatusPanel(results: TestResults) {
 
             Divider(color = Color.White.copy(alpha = 0.1f))
 
-            TestCheckItem(label = "Connection Established", passed = results.connectionPassed)
-            TestCheckItem(label = "Command Write (TX) Test", passed = results.commandTxPassed)
-            TestCheckItem(label = "Telemetry Packet (RX) Test", passed = results.telemetryRxPassed)
-            TestCheckItem(label = "IMU Leveling Alignment", passed = results.imuPassed)
-            TestCheckItem(label = "Battery Safety Threshold (> 6.4V)", passed = results.batteryPassed)
+            TestCheckItem(label = "Connection Established", status = results.connectionStatus)
+            TestCheckItem(label = "Command Write (TX) Test", status = results.commandTxStatus)
+            TestCheckItem(label = "Telemetry Packet (RX) Test", status = results.telemetryRxStatus)
+            TestCheckItem(label = "PCA9685 Servo Driver Connection", status = results.pcaStatus)
+            TestCheckItem(label = "IMU Leveling Alignment", status = results.imuStatus)
+            TestCheckItem(label = "Battery Safety Threshold (> 6.4V)", status = results.batteryStatus)
         }
     }
 }
 
 @Composable
-fun TestCheckItem(label: String, passed: Boolean) {
+fun TestCheckItem(label: String, status: TestStatus) {
+    val statusText = when (status) {
+        TestStatus.PASSED -> "PASSED"
+        TestStatus.PENDING -> "PENDING"
+        TestStatus.FAILED -> "FAILED"
+        TestStatus.SKIPPED -> "SKIPPED (N/A)"
+    }
+    val statusColor = when (status) {
+        TestStatus.PASSED -> Color(0xFF4CAF50)
+        TestStatus.PENDING -> Color(0xFFFFB74D)
+        TestStatus.FAILED -> Color(0xFFF44336)
+        TestStatus.SKIPPED -> Color(0xFF90A4AE)
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -257,8 +278,8 @@ fun TestCheckItem(label: String, passed: Boolean) {
     ) {
         Text(text = label, color = Color.LightGray, fontSize = 14.sp)
         Text(
-            text = if (passed) "PASSED" else "PENDING",
-            color = if (passed) Color(0xFF4CAF50) else Color(0xFFE57373),
+            text = statusText,
+            color = statusColor,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold
         )
