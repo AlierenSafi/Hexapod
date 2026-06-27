@@ -13,6 +13,7 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 static BLECharacteristic* pBLEChar = nullptr;
+static BLECharacteristic* pBLETxChar = nullptr;
 volatile bool bleConnected = false;
 #endif
 
@@ -535,6 +536,12 @@ void wifiLoop() {
 
 void broadcastTelemetry(const char* json) {
   webSocket.broadcastTXT(json);
+#ifdef USE_BLE
+  if (bleConnected && pBLETxChar != nullptr) {
+    pBLETxChar->setValue((uint8_t*)json, strlen(json));
+    pBLETxChar->notify();
+  }
+#endif
 }
 
 bool hasAuthenticatedClient() {
@@ -594,6 +601,12 @@ void bleInit() {
   );
   pBLEChar->setCallbacks(new HexapodBLECallback());
   pBLEChar->addDescriptor(new BLE2902());
+
+  pBLETxChar = pSvc->createCharacteristic(
+    BLE_TX_CHAR_UUID,
+    BLECharacteristic::PROPERTY_NOTIFY
+  );
+  pBLETxChar->addDescriptor(new BLE2902());
 
   pSvc->start();
   BLEAdvertising* pAdv = BLEDevice::getAdvertising();
