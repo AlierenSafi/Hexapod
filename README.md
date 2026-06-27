@@ -121,6 +121,10 @@ Servo Range: 500μs - 2500μs (0-180°)
 | **NRF24L01+** | 2.4GHz RF | Physical controllers (optional) |
 | **ESP32 BLE** | Bluetooth 4.2 | Mobile apps (optional) |
 
+### Wiring Diagram
+
+![Hexapod Wiring Diagram](hexapod_wiring_diagram.jpg)
+
 ### Pinout
 
 ```cpp
