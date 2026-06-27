@@ -507,6 +507,9 @@ void setup() {
   }
   Serial.println(F("[RTOS] 4× Mutex oluşturuldu."));
 
+  // Watchdog'u başlat
+  wdtInit();
+
   // ── 4. Konfigürasyonu yükle (varsayılan → NVS üstüne yaz) ───────
   loadConfiguration();   // hexapod_config.ino
 
