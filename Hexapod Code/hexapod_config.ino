@@ -16,6 +16,27 @@
 //    · syncHardware() configMutex dışında çağrılır (kilitli değildir).
 //    · configChanged volatile flag → Core1 yeni cfg'yi alır.
 // ════════════════════════════════════════════════════════════════
+#include <stddef.h>
+
+// CRC32 dirty-flag write protection variables
+uint32_t savedConfigCRC = 0;
+
+uint32_t calculateCRC32(const uint8_t* data, size_t length) {
+  uint32_t crc = 0xFFFFFFFF;
+  for (size_t i = 0; i < length; i++) {
+    uint8_t byte = data[i];
+    crc ^= byte;
+    for (int j = 0; j < 8; j++) {
+      if (crc & 1) {
+        crc = (crc >> 1) ^ 0xEDB88320;
+      } else {
+        crc >>= 1;
+      }
+    }
+  }
+  return ~crc;
+}
+
 
 // ────────────────────────────────────────────────────────────────
 // setDefaults — RobotSettings fabrika değerlerini yazar
@@ -140,6 +161,9 @@ void loadConfiguration() {
   // ── Bütünlük denetimi ────────────────────────────────────────────
   validateConfig(&cfg);
 
+  // CRC32 değerini güncelle
+  savedConfigCRC = calculateCRC32((const uint8_t*)&cfg, offsetof(RobotSettings, wifiSSID));
+
   Serial.println(F("[CFG] NVS'den yüklendi."));
   printConfiguration();
 }
@@ -156,6 +180,13 @@ void saveConfiguration() {
   xSemaphoreTake(configMutex, portMAX_DELAY);
   snap = cfg;
   xSemaphoreGive(configMutex);
+
+  // CRC32 kontrol et
+  uint32_t currentCRC = calculateCRC32((const uint8_t*)&snap, offsetof(RobotSettings, wifiSSID));
+  if (currentCRC == savedConfigCRC) {
+    Serial.println(F("[CFG] Konfigürasyon değişmedi, NVS yazma işlemi atlandı (CRC32 eşleşti)."));
+    return;
+  }
 
   if (!prefs.begin("hexapod", false)) {
     Serial.println(F("[CFG] HATA: NVS açılamadı!"));
@@ -201,6 +232,7 @@ void saveConfiguration() {
   prefs.putUShort("comm_to",  snap.commTimeoutMs);
 
   prefs.end();
+  savedConfigCRC = currentCRC; // Yeni CRC değerini kaydet
   Serial.println(F("[CFG] NVS'e kaydedildi."));
 }
 
@@ -506,18 +538,6 @@ bool updateParamById(uint8_t paramId, float value, uint8_t flags) {
 //  configMutex DIŞINDA çağrılır.
 // ────────────────────────────────────────────────────────────────
 void syncHardware() {
-  // Anlık konfigürasyon snapshot'ı al
-  RobotSettings snap;
-  xSemaphoreTake(configMutex, portMAX_DELAY);
-  snap = cfg;
-  xSemaphoreGive(configMutex);
-
-  // Trim değişmişse tüm bacakları mevcut açılarıyla yeniden yaz
-  // (Trim writeAngles içinde uygulanır — sadece yeniden çağır)
-  for (uint8_t i = 0; i < 6; i++) {
-    writeAngles(i, &snap);
-  }
-
   // PID integrallerini sıfırla (kp/ki/kd değişince windup temizle)
   pidPitchInt  = 0.0f; pidPitchPrev = 0.0f;
   pidRollInt   = 0.0f; pidRollPrev  = 0.0f;

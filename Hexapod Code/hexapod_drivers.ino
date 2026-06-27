@@ -105,7 +105,21 @@ void writeAngles(uint8_t legIdx, const RobotSettings* s) {
   float tibiaFinal = constrain(a.tibia
                               + (float)s->servoTrim[legIdx][2], -90.0f, 90.0f);
 
-  pca9685SetPWM(sm.addr, sm.coxa,  angleToPWM(coxaFinal,  s), s);
-  pca9685SetPWM(sm.addr, sm.femur, angleToPWM(femurFinal, s), s);
-  pca9685SetPWM(sm.addr, sm.tibia, angleToPWM(tibiaFinal, s), s);
+  uint16_t pwm[3];
+  pwm[0] = angleToPWM(coxaFinal, s);
+  pwm[1] = angleToPWM(femurFinal, s);
+  pwm[2] = angleToPWM(tibiaFinal, s);
+
+  // Auto-Increment kullanarak tek I2C iletimiyle 3 servoyu yaz
+  xSemaphoreTake(wireMutex, portMAX_DELAY);
+  Wire.beginTransmission(sm.addr);
+  Wire.write(LED0_ON_L + 4u * sm.coxa); // Coxa kanalından başla
+  for (int i = 0; i < 3; i++) {
+    Wire.write(0x00); // ON L
+    Wire.write(0x00); // ON H
+    Wire.write((uint8_t)(pwm[i] & 0xFF)); // OFF L
+    Wire.write((uint8_t)(pwm[i] >> 8));   // OFF H
+  }
+  Wire.endTransmission();
+  xSemaphoreGive(wireMutex);
 }

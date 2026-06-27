@@ -152,9 +152,26 @@ bool hasFault(uint8_t faultBit) {
 }
 
 void handleFault(uint8_t faultBit) {
+  static uint32_t lastRecoveryMs[8] = {};
+  
+  // Bulunduğu bitin indeksini bul (0-7)
+  int bitIdx = 0;
+  for (int i = 0; i < 8; i++) {
+    if (faultBit == (1 << i)) {
+      bitIdx = i;
+      break;
+    }
+  }
+  
+  uint32_t now = millis();
+  if (now - lastRecoveryMs[bitIdx] < 5000) {
+    return; // Cooldown aktif, I2C reset veya servo güç döngüsünü engelle
+  }
+  lastRecoveryMs[bitIdx] = now;
+
   switch (faultBit) {
     case FAULT_I2C:
-      Serial.println(F("[FAULT] I2C hatası - IMU ve servo sürücüler etkilenebilir."));
+      Serial.println(F("[FAULT] I2C hatası - IMU ve servo sürücüler etkilenebilir. Kurtarma deneniyor..."));
       // I2C bus'ı resetle
       Wire.end();
       delay(10);
@@ -178,7 +195,7 @@ void handleFault(uint8_t faultBit) {
       break;
       
     case FAULT_SERVO:
-      Serial.println(F("[FAULT] Servo hatası - PCA9685 reset deneniyor."));
+      Serial.println(F("[FAULT] Servo hatası - PCA9685 reset deneniyor..."));
       digitalWrite(OE_PIN, HIGH);
       delay(100);
       pca9685Init(PCA9685_RIGHT);
@@ -206,14 +223,21 @@ void safeStop() {
   // 2. Kısa bekle (gait döngüsü tamamlansın)
   delay(100);
   
-  // 3. Sit down
+  // 3. Kinematik görevini askıya al (çift çekirdek çakışmasını önlemek için)
+  if (hKinTask != nullptr) {
+    vTaskSuspend(hKinTask);
+    Serial.println(F("[SAFETY] KinTask askıya alındı."));
+  }
+  delay(50);
+  
+  // 4. Sit down
   sitDown();
   delay(500);
   
-  // 4. Servo tork kes
+  // 5. Servo tork kes
   digitalWrite(OE_PIN, HIGH);
   
-  // 5. Event
+  // 6. Event
   sendEvent("safe_stop", "Güvenli durdurma tamamlandı");
   
   Serial.println(F("[SAFETY] Servolar devre dışı. Sistem güvenli durumda."));
@@ -224,6 +248,12 @@ void safeResume() {
   
   // Servo tork geri ver
   digitalWrite(OE_PIN, LOW);
+  
+  // Kinematik görevini devam ettir
+  if (hKinTask != nullptr) {
+    vTaskResume(hKinTask);
+    Serial.println(F("[SAFETY] KinTask devam ettirildi."));
+  }
   
   // Kısa bekle
   delay(200);

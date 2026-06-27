@@ -42,6 +42,7 @@
 
 // WiFiState enum'u ve wifiState degiskeni hexapod_esp32_v3.ino'da tanımlı
 extern WiFiState wifiState;
+extern volatile uint32_t wsClientCount;
 
 static WebSocketsServer webSocket = WebSocketsServer(WS_PORT);
 static uint32_t lastReconnectAttempt = 0;
@@ -169,8 +170,9 @@ void wifiLoop() {
 void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
   switch (type) {
     case WStype_CONNECTED:
-      Serial.printf("[WS] Client #%u bağlandı from %s\n", 
-                    num, webSocket.remoteIP(num).toString().c_str());
+      wsClientCount++;
+      Serial.printf("[WS] Client #%u bağlandı from %s (Toplam: %u)\n", 
+                    num, webSocket.remoteIP(num).toString().c_str(), (unsigned int)wsClientCount);
       
       // Hoşgeldin mesajı + config gönder
       {
@@ -188,7 +190,8 @@ void handleWebSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t 
       break;
       
     case WStype_DISCONNECTED:
-      Serial.printf("[WS] Client #%u bağlantı kesti\n", num);
+      if (wsClientCount > 0) wsClientCount--;
+      Serial.printf("[WS] Client #%u bağlantı kesti (Toplam: %u)\n", num, (unsigned int)wsClientCount);
       break;
       
     case WStype_TEXT:
@@ -528,7 +531,5 @@ bool hasAuthenticatedClient() {
 }
 
 uint32_t getClientCount() {
-  // WebSocketsServer kütüphanesinde client sayısı doğrudan alınamıyor
-  // Şimdilik 0 döndürüyoruz
-  return 0;
+  return wsClientCount;
 }

@@ -92,7 +92,11 @@ void sitDown() {
         writeAngles(i, &s);
       }
     }
-    delay(16);
+    if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING) {
+      vTaskDelay(pdMS_TO_TICKS(16));
+    } else {
+      delay(16);
+    }
   }
 
   Serial.println(F("[GAIT] Oturma tamamlandı."));

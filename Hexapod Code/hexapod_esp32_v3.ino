@@ -423,6 +423,14 @@ volatile bool phaseResetReq[6]  = {};
 // Core0 yazar → Core1 okur → konfigürasyonu yeniden yükler
 volatile bool configChanged     = false;
 
+// ── WebSocket client sayacı ──────────────────────────────────────
+volatile uint32_t wsClientCount = 0;
+
+// ── NVS Write Protection CRC32 ──────────────────────────────────
+extern uint32_t savedConfigCRC;
+extern uint32_t calculateCRC32(const uint8_t* data, size_t length);
+
+
 // ── Donanım varlık bayrakları (setup'ta belirlenir) ───────────────
 bool mpuAvailable  = false;
 bool nrfAvailable  = false;
@@ -506,6 +514,10 @@ void setup() {
     esp_restart();
   }
   Serial.println(F("[RTOS] 4× Mutex oluşturuldu."));
+
+  // ── Watchdog timer'ı başlat ─────────────────────────────────────
+  wdtInit();
+
 
   // ── 4. Konfigürasyonu yükle (varsayılan → NVS üstüne yaz) ───────
   loadConfiguration();   // hexapod_config.ino

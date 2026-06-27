@@ -31,7 +31,7 @@ extern WiFiState wifiState;
 // SABİTLER
 // ════════════════════════════════════════════════════════════════
 
-#define BATT_ADC_SAMPLES      32      // Oversampling sayısı
+#define BATT_ADC_SAMPLES      8       // Oversampling sayısı (bloklama süresini 3.2ms'den 0.8ms'ye indirir)
 #define BATT_FILTER_SIZE      8       // Moving average pencere boyutu
 #define BATT_READ_INTERVAL_MS 1000    // Okuma aralığı (1Hz)
 
@@ -239,15 +239,22 @@ void battEmergencyAction() {
   Serial.println(F("║  [BATT] KRİTİK VOLTaj - ACİL DURUM    ║"));
   Serial.println(F("╚════════════════════════════════════════╝\n"));
   
-  // 1. Robotu güvenli pozisyona getir
+  // 1. Kinematik görevini askıya al (çift çekirdek çakışmasını önlemek için)
+  if (hKinTask != nullptr) {
+    vTaskSuspend(hKinTask);
+    Serial.println(F("[BATT] KinTask askıya alındı."));
+  }
+  vTaskDelay(pdMS_TO_TICKS(50)); // scheduler'a izin ver
+  
+  // 2. Robotu güvenli pozisyona getir
   sitDown();
   delay(500);
   
-  // 2. Servo torkunu kes
+  // 3. Servo torkunu kes
   digitalWrite(OE_PIN, HIGH);
   Serial.println(F("[BATT] Servolar devre dışı bırakıldı (OE=HIGH)."));
   
-  // 3. Event gönder
+  // 4. Event gönder
   sendEvent("batt_emergency", "Kritik voltaj - Servolar devre dışı");
 }
 

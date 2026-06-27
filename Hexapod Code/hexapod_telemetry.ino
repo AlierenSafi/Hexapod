@@ -55,44 +55,31 @@ void sendFastTelemetry() {
     legSnap[i] = legs[i];
   }
   
-  // JSON oluştur
-  StaticJsonDocument<768> doc;
-  
-  doc["t"] = "fast";
-  doc["ts"] = now;
-  
-  // IMU
-  JsonObject imu = doc.createNestedObject("imu");
-  imu["p"] = round2(imuSnap.pitch);
-  imu["r"] = round2(imuSnap.roll);
-  imu["ax"] = round3(imuSnap.ax);
-  imu["ay"] = round3(imuSnap.ay);
-  imu["az"] = round3(imuSnap.az);
-  
-  // Gait state
-  doc["gait"] = (int)currentGait;
-  doc["moving"] = isMoving();
-  
-  // Legs (6 bacak)
-  JsonArray legsArr = doc.createNestedArray("legs");
+  // Manueller yerine snprintf kullanarak JSON formatını doğrudan oluştur
+  // ArduinoJson ve stack kopyalama yükünü sıfıra indirir (768 Byte Stack eliminasyonu)
+  int len = snprintf(teleBuffer, sizeof(teleBuffer),
+    "{\"t\":\"fast\",\"ts\":%lu,\"imu\":{\"p\":%.2f,\"r\":%.2f,\"ax\":%.3f,\"ay\":%.3f,\"az\":%.3f},"
+    "\"gait\":%d,\"moving\":%d,\"legs\":[",
+    (unsigned long)now,
+    imuSnap.pitch, imuSnap.roll,
+    imuSnap.ax, imuSnap.ay, imuSnap.az,
+    (int)currentGait, isMoving() ? 1 : 0
+  );
+
   for (int i = 0; i < 6; i++) {
-    JsonObject leg = legsArr.createNestedObject();
-    leg["ph"] = round2(legSnap[i].phase);
-    leg["sw"] = legSnap[i].isSwing;
-    leg["fx"] = round1(legSnap[i].footPos.x);
-    leg["fy"] = round1(legSnap[i].footPos.y);
-    leg["fz"] = round1(legSnap[i].footPos.z);
-    leg["cx"] = round1(legSnap[i].angles.coxa);
-    leg["fm"] = round1(legSnap[i].angles.femur);
-    leg["tb"] = round1(legSnap[i].angles.tibia);
+    len += snprintf(teleBuffer + len, sizeof(teleBuffer) - len,
+      "{\"ph\":%.2f,\"sw\":%d,\"fx\":%.1f,\"fy\":%.1f,\"fz\":%.1f,\"cx\":%.1f,\"fm\":%.1f,\"tb\":%.1f}%s",
+      legSnap[i].phase,
+      legSnap[i].isSwing ? 1 : 0,
+      legSnap[i].footPos.x, legSnap[i].footPos.y, legSnap[i].footPos.z,
+      legSnap[i].angles.coxa, legSnap[i].angles.femur, legSnap[i].angles.tibia,
+      (i < 5) ? "," : ""
+    );
   }
-  
-  // Serialize ve gönder
-  size_t n = serializeJson(doc, teleBuffer, sizeof(teleBuffer));
-  if (n < sizeof(teleBuffer) - 1) {
-    // Broadcast fonksiyonu yok, hexapod_wifi.ino'daki broadcastTelemetry kullanılacak
-    broadcastTelemetry(teleBuffer);
-  }
+
+  snprintf(teleBuffer + len, sizeof(teleBuffer) - len, "]}");
+
+  broadcastTelemetry(teleBuffer);
 }
 
 // ════════════════════════════════════════════════════════════════
