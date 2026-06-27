@@ -100,10 +100,10 @@ class BleManager(private val context: Context) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
                     _connectionState.value = ConnectionState.CONNECTED
-                    log("Connected to ${gatt?.device?.name ?: "Unknown"}")
+                    log("Connected to ${gatt?.device?.name ?: "Unknown"}. Requesting MTU 512...")
                     _testResults.value = _testResults.value.copy(connectionStatus = TestStatus.PASSED)
                     handler.post {
-                        gatt?.discoverServices()
+                        gatt?.requestMtu(512)
                     }
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                     handleDisconnect()
@@ -111,6 +111,17 @@ class BleManager(private val context: Context) {
             } else {
                 log("GATT error: status $status")
                 handleDisconnect()
+            }
+        }
+
+        override fun onMtuChanged(gatt: BluetoothGatt?, mtu: Int, status: Int) {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                log("MTU changed to $mtu. Discovering services...")
+            } else {
+                log("MTU request failed: status $status. Discovering services with default MTU...")
+            }
+            handler.post {
+                gatt?.discoverServices()
             }
         }
 
@@ -140,9 +151,19 @@ class BleManager(private val context: Context) {
             }
         }
 
+        @Deprecated("Deprecated in Java")
         override fun onCharacteristicChanged(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?) {
             if (characteristic?.uuid == CHAR_TX_UUID) {
                 val data = characteristic.getStringValue(0) ?: ""
+                _telemetryJson.value = data
+                log("Telemetry RX (Legacy): $data")
+                parseTelemetry(data)
+            }
+        }
+
+        override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
+            if (characteristic.uuid == CHAR_TX_UUID) {
+                val data = String(value, Charsets.UTF_8)
                 _telemetryJson.value = data
                 log("Telemetry RX: $data")
                 parseTelemetry(data)

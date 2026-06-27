@@ -1,6 +1,8 @@
 #ifndef COMMUNICATION_H
 #define COMMUNICATION_H
 
+#define USE_BLE
+
 #include <Arduino.h>
 #include "robot_config.h"
 #include <freertos/FreeRTOS.h>

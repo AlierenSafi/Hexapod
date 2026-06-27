@@ -590,7 +590,7 @@ class HexapodServerCallback : public BLEServerCallbacks {
 };
 
 void bleInit() {
-  BLEDevice::init("Hexapod-ESP32");
+  BLEDevice::init("Hexapod");
   BLEServer* pSvr = BLEDevice::createServer();
   pSvr->setCallbacks(new HexapodServerCallback());
 
@@ -610,12 +610,19 @@ void bleInit() {
 
   pSvc->start();
   BLEAdvertising* pAdv = BLEDevice::getAdvertising();
-  pAdv->addServiceUUID(BLE_SERVICE_UUID);
-  pAdv->setScanResponse(true);
-  pAdv->setMinPreferred(0x06);
+  
+  BLEAdvertisementData advData;
+  advData.setName("Hexapod");
+  advData.setFlags(0x06); // General Discoverable, BR/EDR Not Supported
+  pAdv->setAdvertisementData(advData);
+
+  BLEAdvertisementData scanResponse;
+  scanResponse.setCompleteServices(BLEUUID(BLE_SERVICE_UUID));
+  pAdv->setScanResponseData(scanResponse);
+
   pAdv->start();
 
-  Serial.println(F("[BLE] Started. name: 'Hexapod-ESP32'"));
+  Serial.println(F("[BLE] Started. name: 'Hexapod'"));
 }
 #endif
 
